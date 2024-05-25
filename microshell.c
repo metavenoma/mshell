@@ -3,22 +3,16 @@
 #include <stdio.h>
 #include <string.h>
 
-typedef struct s_cmd
-{
-	char	**cmd;
-	int		fd[2];
-}	t_cmd;
-
-void	putstr_error(char *str, char *str2)
+void	put_two_strings(char *str, char *str2, int fd)
 {
 	while (*str)
-		write(2, str++, 1);
+		write(fd, str++, 1);
 	if (str2)
 	{
 		while (*str2)
-				write(2, str2++, 1);
+				write(fd, str2++, 1);
 	}
-	write(2, "\n", 1);
+	write(fd, "\n", 1);
 }
 
 int		cmd_counter(char **args)
@@ -35,12 +29,56 @@ int		cmd_counter(char **args)
 	return (res);
 }
 
+void	child_process(char **argv, int io[2], int size)
+{
+	char	**cmd_table = (char**)malloc(sizeof(char *) * size);
+
+	for (int i = 0; i < size; i++)
+			cmd_table[i] = argv[i];
+	dup2(io[1], 1);
+	execve(argv[0], cmd_table, NULL);
+}
+
+void	shell(char **argv, int cmd_count)
+{
+	int			i;
+	int			temp;
+	int			pipefd[2];
+	pid_t		pid;
+
+	i = -1;
+	if (cmd_count == 1)
+	{
+		pid = fork();
+		if (pid == 0)
+				execve(argv[0], argv, NULL);
+		return ;
+	}
+	while (argv[++i])
+	{
+		if (!strcmp(argv[i], "|"))
+		{
+			argv[i][0] = '\0';
+			temp = i + 1;
+			break;
+		}
+	}
+	if (pipe(pipefd) == -1)
+			return ;
+
+	pid = fork();
+	if (pid == 0)
+			child_process(argv, pipefd, i);
+	argv += temp;
+}
+
 int	main(int argc, char **argv, char **envp)
 {
 	(void)argc;
 	(void)envp;
-	int	cmd_count = cmd_counter(argv);
-	
-	printf("%i\n", cmd_count);
-	putstr_error("error: cd: cannot change directory to ", NULL);
+	int		cmd_count = cmd_counter(argv);
+
+	argv++;
+	for (int i = 0; i < cmd_count; i++)
+			shell(argv, cmd_count);
 }
